@@ -2,7 +2,7 @@
 title: "B.1.617.2 Growth rate analysis and transmission advantage"
 author: "Rob Challen"
 date: '`r format(Sys.Date(), "%d-%m-%Y")`'
-output: 
+output:
   pdf_document :
     fig_caption: yes
 header-includes:
@@ -31,7 +31,7 @@ source(here::here("s-pos-clusters.R"))
 source(here::here("s-pos-data.R"))
 
 
-
+Here, growth rate analysis is consolidated. 
 ```
 
 # first infection
@@ -76,16 +76,16 @@ david = readr::read_csv(here::here("input/output_complete-2021-06-02.csv"))
 laura3 = bind_rows(
   laura2 %>% mutate(dataset = "Symptomatic") %>% select(-code) %>% rename(subgroup2 = subgroup,subgroup=source) %>% rename(source=subgroup2),
   laura1 %>% mutate(dataset = "All") %>% select(-code) %>% rename(subgroup2 = subgroup,subgroup=source) %>% rename(source=subgroup2) %>% mutate()
-) %>% 
+) %>%
 mutate(
   Growth = mean,
   Growth.SE = sd,
-  Growth.median = median, 
+  Growth.median = median,
   Growth.lower = q0.025,
   Growth.upper = q0.975
 ) %>% select(-starts_with("q"))
-  
-chris2 = chris %>% 
+
+chris2 = chris %>%
   pivot_longer(cols = c(-Region,-Type,-Source,-Status,-Parameter),names_to="date",values_to="value") %>%
   pivot_wider(names_from = "Parameter",values_from="value") %>% rename(
     name = Region,
@@ -104,7 +104,7 @@ chris2 = chris %>%
   )
 
 david2 = david %>% select(
-  date,name, subgroup, source, 
+  date,name, subgroup, source,
   Growth.median = MAP,
   Growth.lower = lower,
   Growth.upper = upper
@@ -123,19 +123,19 @@ david2 = david %>% select(
 devtools::load_all("~/Git/uk-covid-datatools/")
 ukcovidtools::reload()
 
-allTimeseriesGR = allTimeseries %>% 
+allTimeseriesGR = allTimeseries %>%
   tsp$estimateGrowthRate(window = 28)
 
-allTimeseriesGRPois = allTimeseries %>% 
+allTimeseriesGRPois = allTimeseries %>%
   tsp$estimatePoissonGrowthRate(window = 56) #smoothingWindow = 14,leftSided=FALSE,nocache=TRUE)
 
-symptomaticTimeseriesGR = symptomaticTimeseries %>% 
+symptomaticTimeseriesGR = symptomaticTimeseries %>%
   tsp$estimateGrowthRate(window = 28)
 
-symptomaticTimeseriesGRPois = symptomaticTimeseries %>% 
+symptomaticTimeseriesGRPois = symptomaticTimeseries %>%
   tsp$estimatePoissonGrowthRate(window = 56)
 
-  #tsp$logIncidenceStats(smoothingWindow = 14,leftSided=FALSE,nocache=TRUE) 
+  #tsp$logIncidenceStats(smoothingWindow = 14,leftSided=FALSE,nocache=TRUE)
 
 rob = bind_rows(
   allTimeseriesGRPois %>% mutate(dataset = "All",method = "Pois (GLM)"),
@@ -143,13 +143,13 @@ rob = bind_rows(
   allTimeseriesGR %>% mutate(dataset = "All",method = "Pois (Locfit)"),
   symptomaticTimeseriesGR  %>% mutate(dataset = "Symptomatic",method = "Pois (Locfit)")
 ) %>% select(
-  date, name, subgroup, source, dataset, method, 
-  Growth = Growth.value, 
+  date, name, subgroup, source, dataset, method,
+  Growth = Growth.value,
   Growth.SE = Growth.SE.value,
   Growth.median = Growth.Quantile.0.5.value,
   Growth.lower = Growth.Quantile.0.025.value,
   Growth.upper = Growth.Quantile.0.975.value
-) 
+)
 
 
 ```
@@ -231,10 +231,10 @@ allEstimates = bind_rows(
 
 
 # growthRateTest = list(
-#   input = symptomaticTimeseries %>% filter(source == "infection episodes") %>% ungroup() %>% as_tibble() %>% select(-type,-statistic,-ageCat,-gender,-codeType,-code,-Implicit, -name.original, -note), 
+#   input = symptomaticTimeseries %>% filter(source == "infection episodes") %>% ungroup() %>% as_tibble() %>% select(-type,-statistic,-ageCat,-gender,-codeType,-code,-Implicit, -name.original, -note),
 #   output = allEstimates %>% filter(source == "infection episodes" & dataset == "Symptomatic") %>% select(-dataset,-median)
 # )
-# 
+#
 # usethis::use_data(growthRateTest,overwrite = TRUE)
 
 doGRPlot = function(
@@ -251,23 +251,23 @@ doGRPlot = function(
   mergeModels = FALSE,
   showDominance = FALSE, completeDominance=NULL, zeroSpos=NULL
   ) {
-  
-  
-    filteredTS = allEstimates %>% 
-      filter(source %in% sources & date>minDate & date<maxDate) %>% 
+
+
+    filteredTS = allEstimates %>%
+      filter(source %in% sources & date>minDate & date<maxDate) %>%
       filter(subgroup %in% subgroups) %>%
       filter(dataset %in% datasets) %>%
-      filter(method %in% methods) %>% 
-      filter(name %in% names) %>% 
+      filter(method %in% methods) %>%
+      filter(name %in% names) %>%
       mutate(name = name %>% ordered(names))
-    
+
     modelEndDate = filteredTS %>% filter(!is.na(Growth)) %>% group_by(source,subgroup,dataset,name,method) %>% summarise(end = max(date,na.rm = TRUE)) %>% pull(end) %>% max(na.rm = TRUE)
     #browser()
     filteredTS = filteredTS %>% filter(date<=modelEndDate)
-    
+
     # if (mergeModels) {
     #   
-    #   filteredTS = filteredTS %>% 
+    #   filteredTS = filteredTS %>%
     #     group_by(source,subgroup,dataset,name, date) %>%
     #     group_modify(function(d,g,...) {
     #       mus = d$Growth
@@ -289,24 +289,24 @@ doGRPlot = function(
     #       ))
     #     }) %>% ungroup()
     # }
-    
+
     modelComp = ggplot(filteredTS, mapping=aes(x=date))+
       geom_ribbon(mapping=aes(
         ymin=Growth.lower,
         ymax=Growth.upper,
         group=paste0(subgroup,method,dataset)),
-        colour=NA, 
-        fill="grey60", 
+        colour=NA,
+        fill="grey60",
         alpha=0.2)+
       geom_line(mapping=aes(
         y=Growth.median,
         color = subgroup,
         linetype=method)
-      )+ 
+      )+
       scale_y_continuous(
-        sec.axis = dup_axis( 
-          breaks = log(2)/c(5,10,Inf,-10,-5), 
-          labels = c("5","10","\u00B1\u221E","-10","-5"), 
+        sec.axis = dup_axis(
+          breaks = log(2)/c(5,10,Inf,-10,-5),
+          labels = c("5","10","\u00B1\u221E","-10","-5"),
           name="doubling time")
       )+
       scale_x_date(breaks=seq(as.Date(minDate),Sys.Date(),by = 14),date_labels="%d-%m")+  #date_breaks = "2 week",date_labels="%d-%m")+
@@ -316,16 +316,16 @@ doGRPlot = function(
       theme(axis.text.x = element_text(angle=60))+
       geom_hline(yintercept = 0, colour="grey50")+
       xlab("specimen date")
-    
+
     if (showDominance) {
-    modelComp = modelComp + 
+    modelComp = modelComp +
       geom_vline(data=completeDominance %>% rename(name=area) %>% filter(date > minDate & date < maxDate & name %in% names), mapping = aes(xintercept = date), colour="black")+
       geom_vline(data=zeroSpos %>% rename(name=area) %>% filter(date > minDate & date < maxDate & name %in% names), mapping = aes(xintercept = date), colour="black",linetype="dashed")
     }
-    
-    #if (!mergeModels) 
+
+    #if (!mergeModels)
       modelComp = modelComp + scale_linetype_manual(values=c("Pois (GLM)"="solid","GAM"="twodash", "GP"="dotted","Pois (Bayes)"="dotdash","Pois (Locfit)"="longdash"))
-      
+
     modelComp
 }
 ```
@@ -333,8 +333,8 @@ doGRPlot = function(
 
 ```{r}
 # lapply(names(clusters),function(clustName) {
-#   allEstimates %>% 
-#     doGRPlot(clustName = clustName) %>% 
+#   allEstimates %>%
+#     doGRPlot(clustName = clustName) %>%
 #     standardPrintOutput::saveThirdPageFigure(paste0(here::here("output/sGeneAOCHighGrowth-"),clustName))})
 ```
 
@@ -371,7 +371,7 @@ doPVariantGivenSplusPlot = function(pSposIsVariantAOC, areas, maxDate = max(pSpo
     scale_x_date(breaks=seq(as.Date(minDate),Sys.Date(),by = 14),date_labels="%d-%m")+  #date_breaks = "2 week",date_labels="%d-%m")+
     coord_cartesian(xlim=c(as.Date(minDate),as.Date(maxDate)))
   if (showDominance) {
-    pSposPlotAOC = pSposPlotAOC + 
+    pSposPlotAOC = pSposPlotAOC +
       geom_vline(data=completeDominance %>% filter(date > minDate & date < maxDate & area %in% areas), mapping = aes(xintercept = date), colour="black")+
       geom_vline(data=zeroSpos %>% filter(date > minDate & date < maxDate & area %in% areas), mapping = aes(xintercept = date), colour="black",linetype="dashed")
   }
@@ -417,8 +417,8 @@ p5 = (p1/p2/p3/p4 + patchwork::plot_annotation(tag_levels="A") + plot_layout(gui
 
 standardPrintOutput::saveHalfPageFigure(p5, paste0(here::here("output/Figure2-"),Sys.Date()))
 
-allEstimates %>% 
-  filter(source=="infection episodes" & date>"2021-01-21" & subgroup %in% c("positive","negative") & dataset=="Symptomatic") %>% 
+allEstimates %>%
+  filter(source=="infection episodes" & date>"2021-01-21" & subgroup %in% c("positive","negative") & dataset=="Symptomatic") %>%
   readr::write_csv(paste0(here::here("output/allEstimates-"),Sys.Date(),".csv"))
 
 ```
@@ -437,7 +437,7 @@ tmp = doGRPlot(allEstimates,
   standardPrintOutput::smallLegend(spaceLegend = 1)+theme(
     legend.position = "bottom",
     legend.direction = "horizontal",
-    axis.text.x.bottom = element_text(angle=60), 
+    axis.text.x.bottom = element_text(angle=60),
     text = element_text(size=6),
     legend.justification = "left"
   )
@@ -455,7 +455,7 @@ tmp = doGRPlot(allEstimates,
   standardPrintOutput::smallLegend(spaceLegend = 1)+theme(
     legend.position = "bottom",
     legend.direction = "horizontal",
-    axis.text.x.bottom = element_text(angle=60), 
+    axis.text.x.bottom = element_text(angle=60),
     text = element_text(size=6),
     legend.justification = "left"
   )
@@ -504,14 +504,14 @@ doPSgeneGivenPositive = function(sgeneCountsAOC, areas, maxDate = max(sgeneCount
     scale_x_date(breaks=seq(as.Date(minDate),Sys.Date(),by = 14),date_labels="%d-%m")+  #date_breaks = "2 week",date_labels="%d-%m")+
     coord_cartesian(xlim=c(as.Date(minDate),as.Date(maxDate)))
   if (showDominance) {
-    p = p + 
+    p = p +
       geom_vline(data=completeDominance %>% filter(date > minDate & date < maxDate & area %in% areas), mapping = aes(xintercept = date), colour="black")+
       geom_vline(data=zeroSpos %>% filter(date > minDate & date < maxDate & area %in% areas), mapping = aes(xintercept = date), colour="black",linetype="dashed")
   }
   p
 }
-                                 
-                                 
+
+
 # doPSgeneGivenPositive(sgeneCounts %>% mutate(area="England"), areas = nationalClusters$Reference, showDominance = TRUE, completeDominance = completeDominanceEng, zeroSpos = zeroSposEng)
 
 ```
@@ -622,7 +622,7 @@ R = (1+r\kappa \bar{G} )^{1/\kappa} \\
 R = (1+\frac{r}{\beta})^\alpha\\
 
 
-$$ 
+$$
 Solutions only exist for situation where $r > -\beta \implies r > -\bar{G}/\bar{S}^2$
 
 
@@ -631,7 +631,7 @@ Solutions only exist for situation where $r > -\beta \implies r > -\bar{G}/\bar{
 $$
 
 T_{1>2} = \frac{R_1}{R_2} \\
- 
+
 $$
 
 assuming $\alpha$ & $\beta$ is unchanged between variants:
@@ -679,33 +679,33 @@ doAdvantage = function(
   datasets="Symptomatic",
   methods = unique(allEstimates$method)
   ) {
- 
+
   disadvFilter = enexpr(disadvFilter)
   advFilter = enexpr(advFilter)
-  
+
   # browser()
-  
+
   gtAssumptions = gtAssumptions %>% mutate(
     a = list(c(seq(0.5,19.5),25)),
     y = purrr::pmap(list(alpha,beta,a), function(.shape,.rate,.p) { pgamma(.p,.shape,.rate)-lag(pgamma(.p,.shape,.rate),default=0) }),
   )
-  
-  filteredTS = allEstimates %>% 
+
+  filteredTS = allEstimates %>%
     filter(source %in% sources) %>%
     filter(dataset %in% datasets) %>%
-    filter(method %in% methods) %>% 
-    filter(name %in% names) %>% 
+    filter(method %in% methods) %>%
+    filter(name %in% names) %>%
     mutate(name = name %>% ordered(names)) %>%
     filter(!!disadvFilter | !!advFilter) %>%
     filter(!is.na(Growth) & !is.na(Growth.SE))
-  
+
   # filteredTS = filteredTS %>% group_by(source,date,subgroup,dataset,method,name)
   # browser()
   precalc = purrr::map2(gtAssumptions$a,gtAssumptions$y,function(a,y) y/(a - lag(a,default=0)))
-  
+
   discGRToR = function(r, y = gtAssumptions$y, a = gtAssumptions$a, p=precalc) {
     R = pmap(list(r,a,y,p), function(r,a,y,p) {
-      # browser(); 
+      # browser();
       # tmp = r/sum(y*(exp(-r*lag(a,default=0))-exp(-r*a))/(a - lag(a,default=0)))
       tmp = r/sum(p*(exp(-r*lag(a,default=0))-exp(-r*a)))
       # if(!is.finite(tmp)) browser()
@@ -714,9 +714,9 @@ doAdvantage = function(
     #browser()
     return(unlist(R))
   }
-  
+
   filteredTS = filteredTS %>% mutate(
-    # this is the num / denominator of the fractions above. 
+    # this is the num / denominator of the fractions above.
     # and is probably an R estimate
     # keep this as a list column for now
     bootstrap = map2( Growth, Growth.SE, function(mean,sd) {
@@ -724,7 +724,7 @@ doAdvantage = function(
         id = 1:nrow(gtAssumptions),
         # alpha = gtAssumptions$alpha,
         # beta = gtAssumptions$beta,
-        sample_r = rnorm(nrow(gtAssumptions),mean,sd), 
+        sample_r = rnorm(nrow(gtAssumptions),mean,sd),
         R = ( 1 + sample_r/gtAssumptions$beta ) ^ gtAssumptions$alpha,
         R_disc = discGRToR(sample_r)
       )
@@ -733,14 +733,14 @@ doAdvantage = function(
   #   R.mean = purrr::map_dbl(bootstrap, function(.x) mean(.x$R)),
   #   R.sd = purrr::map_dbl(bootstrap, function(.x) sd(.x$R))
   )
-  
+
   # browser()
-  
+
   disadv = filteredTS %>% filter(!!disadvFilter)
   adv = filteredTS %>% filter(!!advFilter)
-  
+
   compare = adv %>% inner_join(disadv, by=c("source","date","dataset","method","name"), suffix=c(".adv",".disadv"))
-  
+
   # calculate the ratio for each bootstrap.
   compare2 = compare %>% mutate(bootstrap = purrr::map2(bootstrap.adv, bootstrap.disadv, function(adv,disadv) {
     adv %>% inner_join(disadv, by="id", suffix=c(".adv",".disadv")) %>% mutate(
@@ -748,18 +748,18 @@ doAdvantage = function(
       transadv = R_disc.adv/R_disc.disadv
       )
   })) %>% select(-bootstrap.adv, -bootstrap.disadv)
-  
+
   return(compare2)
 }
- 
+
 summariseAdvantage = function(compare, combineDays=FALSE,mergeModels = FALSE, completeDominance=NULL, zeroSpos=NULL) {
   # Options are:
-  
+
   if(combineDays) {
-    compare2 = compare %>% 
-      mutate(name = as.character(name)) %>% 
-      inner_join(completeDominance %>% select(name=area,date), by="name",suffix=c("",".after")) %>% 
-      inner_join(zeroSpos %>% select(name=area,date), by="name",suffix=c("",".before")) %>% 
+    compare2 = compare %>%
+      mutate(name = as.character(name)) %>%
+      inner_join(completeDominance %>% select(name=area,date), by="name",suffix=c("",".after")) %>%
+      inner_join(zeroSpos %>% select(name=area,date), by="name",suffix=c("",".before")) %>%
       filter(date > date.after & date < date.before)
   } else {
     compare2 = compare %>%
@@ -768,9 +768,9 @@ summariseAdvantage = function(compare, combineDays=FALSE,mergeModels = FALSE, co
         date.before = max(date)+1
       )
   }
-  
+
   compare2 = compare2 %>% unnest(bootstrap)
-  
+
   # Summarise bootstraps for each day
   compare2 = compare2 %>% group_by(source,dataset,name)
   # merge methods
@@ -781,7 +781,7 @@ summariseAdvantage = function(compare, combineDays=FALSE,mergeModels = FALSE, co
   } else {
     compare2 = compare2 %>% group_by(date.after,date.before, .add=TRUE)
   }
-  
+
   # browser()
   # grps == compare2 %>% groups()
   # compare2 = compare2 %>% summarise(
@@ -789,25 +789,25 @@ summariseAdvantage = function(compare, combineDays=FALSE,mergeModels = FALSE, co
   #     bootstrap.adv = bind_rows(bootstrap.adv),
   #     bootstrap.disadv = bind_rows(bootstrap.disadv),
   # )
-  
+
   out = compare2 %>% summarise(
     transadv.mean = mean(transadv),
     transadv.sd = sd(transadv),
-    
+
     transadv.Quantile.0.025 = quantile(transadv,0.025),
     transadv.Quantile.0.25 = quantile(transadv,0.25),
     transadv.Quantile.0.5 = quantile(transadv,0.5),
     transadv.Quantile.0.75 = quantile(transadv,0.75),
     transadv.Quantile.0.975 = quantile(transadv,0.975),
-    
+
     R.adv.mean = mean(R_disc.adv),
     R.adv.sd = sd(R_disc.adv),
     R.disadv.mean = mean(R_disc.disadv),
     R.disadv.sd = sd(R_disc.disadv)
   )
-  
+
   return(out)
-  
+
 }
 
 allNational =  as.vector(unlist(nationalClusters))
@@ -888,6 +888,3 @@ p10 = (p1/p2/p3) + patchwork::plot_annotation(tag_levels="A") + plot_layout(guid
 standardPrintOutput::saveHalfPageFigure(p10, paste0(here::here("output/Fig4-GrowthAdvantage-"),Sys.Date()))
 
 ```
-
-
-
