@@ -756,6 +756,17 @@ tmp2 = allEpisodes %>%
   filter(date>="2020-10-01")
   
 tmp2 %>% readr::write_csv(paste0(here::here("output/raw-demographics-line-list-by-area-of-concern-"),Sys.Date(),".csv"))
+
+
+tmp3 = tmp2 %>% mutate(
+  date = date + sample.int(6,n(),replace = TRUE) - 3,
+  age = age + sample.int(6,n(),replace = TRUE) - 3
+)  %>%
+filter(date>="2020-10-01" & date < max(tmp2$date) & !is.na(area)) %>% 
+select(date,sGene,area,LTLA_code,LTLA_name,age)
+  
+tmp3 %>% readr::write_csv(paste0(here::here("output/synthetic-demographics-line-list-by-area-of-concern-"),Sys.Date(),".csv"))
+
 ```  
 
 

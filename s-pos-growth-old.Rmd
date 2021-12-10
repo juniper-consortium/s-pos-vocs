@@ -83,7 +83,7 @@ mutate(
   Growth.median = median, 
   Growth.lower = q0.025,
   Growth.upper = q0.975
-) %>% select(-starts_with("q"), -mean, -sd, -median)
+) %>% select(-starts_with("q"))
   
 chris2 = chris %>% 
   pivot_longer(cols = c(-Region,-Type,-Source,-Status,-Parameter),names_to="date",values_to="value") %>%
@@ -124,13 +124,13 @@ devtools::load_all("~/Git/uk-covid-datatools/")
 ukcovidtools::reload()
 
 allTimeseriesGR = allTimeseries %>% 
-  tsp$estimateGrowthRate(window = 28,polynomialDegree = 1,nearestNeigbours = TRUE)
+  tsp$estimateGrowthRate(window = 28)
 
 allTimeseriesGRPois = allTimeseries %>% 
   tsp$estimatePoissonGrowthRate(window = 56) #smoothingWindow = 14,leftSided=FALSE,nocache=TRUE)
 
 symptomaticTimeseriesGR = symptomaticTimeseries %>% 
-  tsp$estimateGrowthRate(window = 28,polynomialDegree = 1,nearestNeigbours = TRUE)
+  tsp$estimateGrowthRate(window = 28)
 
 symptomaticTimeseriesGRPois = symptomaticTimeseries %>% 
   tsp$estimatePoissonGrowthRate(window = 56)
@@ -151,14 +151,6 @@ rob = bind_rows(
   Growth.upper = Growth.Quantile.0.975.value
 ) 
 
-allAreas = as.vector(c(unlist(localClusters),unlist(nationalClusters)))
-
-allEstimates = bind_rows(
-  laura3 %>% mutate(method = "GP"),
-  chris2 %>% mutate(method = "GAM"),
-  david2 %>% mutate(method = "Pois (Bayes)"),
-  rob
-)
 
 ```
 
@@ -227,6 +219,14 @@ allEstimates = bind_rows(
 
 ```{r}
 
+allAreas = as.vector(c(unlist(localClusters),unlist(nationalClusters)))
+
+allEstimates = bind_rows(
+  laura3 %>% mutate(method = "GP"),
+  chris2 %>% mutate(method = "GAM"),
+  david2 %>% mutate(method = "Pois (Bayes)"),
+  rob
+)
 
 
 
@@ -301,8 +301,7 @@ doGRPlot = function(
       geom_line(mapping=aes(
         y=Growth.median,
         color = subgroup,
-        linetype=method),
-        size=0.25
+        linetype=method)
       )+ 
       scale_y_continuous(
         sec.axis = dup_axis( 
@@ -361,28 +360,11 @@ pSposIsVariantAOC = allVoc %>%
   ungroup() %>%
   mutate(type = type %>% ordered(vocLevels2))
 
-pSposIsVariant = allVoc %>%
-  inner_join(llDemog %>% select(FINALID, LTLA_code), by=c("finalid"="FINALID")) %>%
-  filter(sGene == "positive") %>%
-  mapVOCtoLineage(vocVar=variant,lineages = c("B.1.617.2","B.1.617.1","B.1.351","P.1 & P.2")) %>%
-  group_by(type, date=specimen_date) %>%
-  summarise(count= n()) %>%
-  ungroup() %>%
-  tidyr::complete(type,date,fill=list(count=0)) %>%
-  group_by(type) %>%
-  arrange(date) %>%
-  mutate(Roll.count = stats::filter(count,filter=rep(1/21,21))) %>%
-  filter(!is.na(Roll.count)) %>%
-  group_by(date) %>%
-  mutate(binom::binom.confint(Roll.count, sum(Roll.count), conf.level = 0.95, methods = "wilson")) %>%
-  ungroup() %>%
-  mutate(type = type %>% ordered(vocLevels2), area="England")
-
 doPVariantGivenSplusPlot = function(pSposIsVariantAOC, areas, maxDate = max(pSposIsVariantAOC$date), minDate="2021-01-21", showDominance = FALSE, completeDominance=NULL, zeroSpos=NULL) {
   pSposPlotAOC = ggplot(pSposIsVariantAOC %>% filter(date > minDate & date < maxDate & area %in% areas), aes(x=date, y=mean, ymin = lower,ymax=upper,colour=type, fill=type))+
     #geom_ribbon(alpha=0.2,colour=NA)+
     #geom_line(position="stack")+
-    geom_area(alpha=0.25,outline.type="both",size=0.25)+
+    geom_area(alpha=0.25,outline.type="both")+
     ylab("Proportion of\nsequenced S+")+
     #theme(legend.title = element_blank())+
     scale_fill_manual(values = palVoc,aesthetics = c("colour","fill"),name=NULL)+
@@ -505,21 +487,6 @@ sgeneCountsAOC = allEpisodes %>%
   mutate(binom::binom.confint(Roll.count, sum(Roll.count), conf.level = 0.95, methods = "wilson")) %>%
   ungroup()
 
-sgeneCounts = allEpisodes %>%
-  inner_join(llDemog %>% select(FINALID, LTLA_code), by=c("FINALID")) %>%
-  #filter(sGene != "unknown") %>%
-  group_by(sGene, date=earliest_specimen_date) %>%
-  summarise(count= n()) %>%
-  ungroup() %>%
-  tidyr::complete(sGene,date,fill=list(count=0)) %>%
-  group_by(sGene) %>%
-  arrange(date) %>%
-  mutate(Roll.count = stats::filter(count,filter=rep(1/21,21))) %>%
-  filter(!is.na(Roll.count)) %>%
-  group_by(date) %>%
-  mutate(binom::binom.confint(Roll.count, sum(Roll.count), conf.level = 0.95, methods = "wilson")) %>%
-  ungroup()
-
 zeroSpos = sgeneCountsAOC %>% group_by(area) %>% filter(sGene=="negative") %>% filter(upper>0.1 | lower>0.05) %>% filter(date == max(date))
 completeDominance = pSposIsVariantAOC %>% group_by(area) %>% filter(type=="B.1.617.2") %>% filter(upper<0.95 | lower<0.7) %>% filter(date == max(date))
 
@@ -531,7 +498,7 @@ doPSgeneGivenPositive = function(sgeneCountsAOC, areas, maxDate = max(sgeneCount
   p = ggplot(sgeneCountsAOC %>% filter(date > minDate & date < maxDate & area %in% areas), aes(x=date, y=mean, ymin = lower,ymax=upper,colour=sGene, fill=sGene))+
     #geom_ribbon(alpha=0.2,colour=NA)+
     #geom_line(position="stack")+
-    geom_area(alpha=0.25,outline.type="both",size=0.25)+
+    geom_area(alpha=0.25,outline.type="both")+
     ylab("Proportion of\nall positive tests")+
     scale_fill_manual(values = sgenePal,aesthetics = c("colour","fill"),name=NULL)+
     scale_x_date(breaks=seq(as.Date(minDate),Sys.Date(),by = 14),date_labels="%d-%m")+  #date_breaks = "2 week",date_labels="%d-%m")+
@@ -681,156 +648,38 @@ R = \frac{r}{\sum_{i=1}^n{\frac{y_i}{a_i-a_{i-1}}(e^{-ra_{i-1}} - e^{-ra_i})}}
 $$
 
 ```{r}
-
-set.seed(101)
 # Will Hart 
-gtPosterior = readxl::read_xlsx(here::here("input/GT_posterior.xlsx")) %>% sample_n(100,replace = FALSE) %>% mutate(
+gtPosterior = readxl::read_xlsx(here::here("input/GT_posterior.xlsx")) %>% mutate(
     alpha = mean^2/sd^2,
     beta = mean/sd^2,
-    variant = "Unspecified",
-    source = "Hart (2021) independent model"
-  ) %>%
-  inner_join(tibble(subgroup=c("positive","negative")), by = character())
-
-gtPosteriorMech = readxl::read_xlsx(here::here("input/GT_posterior_mech.xlsx")) %>% sample_n(100,replace = FALSE) %>% mutate(
-    alpha = mean^2/sd^2,
-    beta = mean/sd^2,
-    variant = "Unspecified",
-    source = "Hart (2021) mechanistic model"
-  ) %>%
-  inner_join(tibble(subgroup=c("positive","negative")), by = character())
-
-gtIntrinsicVariant = readxl::read_xlsx(here::here("input/Hart-personal-communication/intrinsic.xlsx")) %>% sample_n(100,replace = FALSE)
-
-gtIntrinsicVariant = bind_rows(
-  gtIntrinsicVariant %>% 
-    select(mean = mean_Alpha, sd = sd_Alpha) %>%
-    mutate(
-      alpha = mean^2/sd^2,
-      beta = mean/sd^2,
-      variant = "Alpha",
-      subgroup = "negative",
-      source = "Hart (pers comm) intrinsic"
-    ),
-  gtIntrinsicVariant %>% 
-    select(mean = mean_Delta, sd = sd_Delta) %>%
-    mutate(
-      alpha = mean^2/sd^2,
-      beta = mean/sd^2,
-      variant = "Delta",
-      subgroup = "positive",
-      source = "Hart (pers comm) intrinsic"
-    )
-)
-
-gtHouseholdVariant = readxl::read_xlsx(here::here("input/Hart-personal-communication/household.xlsx")) %>% sample_n(100,replace = FALSE)
-
-gtHouseholdVariant = bind_rows(
-  gtHouseholdVariant %>% 
-    select(mean = mean_Alpha, sd = sd_Alpha) %>%
-    mutate(
-      alpha = mean^2/sd^2,
-      beta = mean/sd^2,
-      variant = "Alpha",
-      subgroup = "negative",
-      source = "Hart (pers comm) household"
-    ),
-  gtHouseholdVariant %>% 
-    select(mean = mean_Delta, sd = sd_Delta) %>%
-    mutate(
-      alpha = mean^2/sd^2,
-      beta = mean/sd^2,
-      variant = "Delta",
-      subgroup = "positive",
-      source = "Hart (pers comm) household"
-    )
-)
-
-generationIntervals = readr::read_csv(here::here("input/generation-intervals.csv"))
-generationIntervals = generationIntervals %>% pivot_wider(values_from = value, names_from=param) %>% 
-  mutate(
-    alpha = shape,
-    beta = rate,
-    mean = shape/rate,
-    sd = sqrt(shape/rate^2),
-    variant = "Unspecified",
-    source = "Challen (2020)"
-  ) %>%
-  inner_join(tibble(subgroup=c("positive","negative")), by = character())
-
-
-generationIntervalGanyani = readRDS(here::here("input/EpiNow2_gi.rds")) %>% sample_n(100,replace = FALSE) %>% mutate(
-    alpha = mean^2/sd^2,
-    beta = mean/sd^2,
-    variant = "Unspecified",
-    source = "Ganyani (2020) via epinow2"
-  ) %>%
-  inner_join(tibble(subgroup=c("positive","negative")), by = character())
-
-gtAssumptions = bind_rows(
-  gtPosterior,
-  gtPosteriorMech,
-  gtIntrinsicVariant,
-  gtHouseholdVariant,
-  generationIntervals,
-  generationIntervalGanyani
-)
-
-# Parameterised gtAssumptions
-gtAssumptions = gtAssumptions %>% mutate(
-    a = list(c(seq(0.5,19.5),25)),
-    y = purrr::pmap(list(alpha,beta,a), function(.shape,.rate,.p) { 
-      tmp = pgamma(.p,.shape,.rate)-lag(pgamma(.p,.shape,.rate),default=0) 
-      tmp = tmp/sum(tmp)
-    }),
+    variant = "Unspecified"
   )
 
-# Empirical gt
-gtHouseholdEmpiricalVariant = readxl::read_xlsx(here::here("input/Hart-personal-communication/household_GT_samples.xlsx"))
+gtPosteriorMech = readxl::read_xlsx(here::here("input/GT_posterior_mech.xlsx")) %>% mutate(
+    alpha = mean^2/sd^2,
+    beta = mean/sd^2,
+    variant = "Unspecified"
+  )
 
-set.seed(101)
 
-bootstraps = bind_rows(lapply(1:100, function(x) {
-  fn = function(gt, variantName, sgene) {
-    # browser()
-    s = tibble(x=sample(gt,size = 500,replace = TRUE))
-    breaks = c(-Inf,seq(0.5,19.5),25)
-    tab_s = s %>% 
-      mutate(x_cut = as.integer(cut(x,breaks))) %>% 
-      group_by(x_cut) %>% 
-      filter(!is.na(x_cut)) %>% # truncate
-      count() %>% 
-      ungroup() %>% 
-      complete(x_cut=1:(length(breaks)-1),fill=list(n=0)) %>%
-      mutate(p = n/sum(n)) %>% 
-      arrange(x_cut)
-    mean_s = mean(s$x)
-    sd_s = sd(s$x)
-    tibble(
-      mean = mean_s,
-      sd = sd_s,
-      alpha = NA,
-      beta = NA,
-      variant = variantName,
-      subgroup = sgene,
-      a=list(c(seq(0.5,19.5),25)),
-      y=list(tab_s$p)
-    )
-  }
-  # browser()
-  return(bind_rows(
-    fn(gtHouseholdEmpiricalVariant$Alpha,"Alpha","negative"),
-    fn(gtHouseholdEmpiricalVariant$Delta,"Delta","positive")
-  ))
-}))
+generationIntervals = readr::read_csv(here::here("input/generation-intervals.csv"))
+generationIntervals = generationIntervals %>% pivot_wider(values_from = value, names_from=param) %>% mutate(
+  alpha = shape,
+  beta = rate,
+  variant = "Unspecified"
+)
 
-gtAssumptions2 = bind_rows(gtAssumptions,bootstraps %>% mutate(source = "Hart (pers comm) empirical"))
+getVariantIntrinsic = readxl::read_xlsx(here::here("input/Hart-personal-communication/intrinsic.xlsx"))
+tidyVariant = bind_rows(
+  getVariantIntrinsic %>% select (mean = mean_Alpha, sd = sd_Alpha) %>% mutate(
+    alpha = mean^2/sd^2, beta = mean/sd^2, variant = "Alpha"
+  ),
+  getVariantIntrinsic %>% select (mean = mean_Delta, sd = sd_Delta) %>% mutate(
+    alpha = mean^2/sd^2, beta = mean/sd^2, variant = "Delta"
+  )
+)
 
-p = ggplot(gtAssumptions2, aes(x=mean,y=sd,colour = variant))+geom_point(size=0.5)+facet_wrap(vars(source),ncol=2)+
-  xlab("Generation time mean (days)")+
-  ylab("Generation time standard deviation (days)")
 
-standardPrintOutput::saveHalfPageFigure(p, paste0(here::here("output/SuppFig-GenerationTimeSamples-"),Sys.Date()))
 
 ```
 
@@ -838,89 +687,87 @@ standardPrintOutput::saveHalfPageFigure(p, paste0(here::here("output/SuppFig-Gen
 doAdvantage = function(
   allEstimates,
   gtAssumptions,
-  names = unname(unlist(nationalClusters)),
+  names,
   sources="infection episodes",
+  advFilter = subgroup=="positive",
+  disadvFilter = subgroup=="negative",
   datasets="Symptomatic",
-  methods = unique(allEstimates$method),
-  gtSource = unique(gtAssumptions$source),
-  ...
+  methods = unique(allEstimates$method)
   ) {
  
+  disadvFilter = enexpr(disadvFilter)
+  advFilter = enexpr(advFilter)
+  
   # browser()
   
-  tsp$getSaved(id = "ADVANTAGE",params = list(allEstimates,gtAssumptions,names,sources,datasets,methods,gtSource), ..., function(...) {
+  gtAssumptions = gtAssumptions %>% mutate(
+    a = list(c(seq(0.5,19.5),25)),
+    y = purrr::pmap(list(alpha,beta,a), function(.shape,.rate,.p) { pgamma(.p,.shape,.rate)-lag(pgamma(.p,.shape,.rate),default=0) }),
+  )
   
-    gtAssumptions = gtAssumptions %>% filter(source %in% gtSource)
-    
-    filteredTS = allEstimates %>% 
-      filter(source %in% sources) %>%
-      filter(dataset %in% datasets) %>%
-      filter(method %in% methods) %>% 
-      filter(name %in% names) %>% 
-      mutate(name = name %>% ordered(names)) %>%
-      filter(!is.na(Growth) & !is.na(Growth.SE))
-    
-    # filteredTS = filteredTS %>% group_by(source,date,subgroup,dataset,method,name)
-    # browser()
-    
-    discGRToR = function(r, d) {
-        
-        d$p = purrr::map2(d$a,d$y,function(a,y) y/(a - lag(a,default=0)))
-        
-        R = pmap(list(r,d$a,d$y,d$p), function(r,a,y,p) {
-          # tmp = r/sum(y*(exp(-r*lag(a,default=0))-exp(-r*a))/(a - lag(a,default=0)))
-          tmp = r/sum(p*(exp(-r*lag(a,default=0))-exp(-r*a)))
-          # if(!is.finite(tmp)) browser()
-          return(tmp)
-        })
-        # browser()
-        return(unlist(R))
-      }
-    
-    grpComparison = gtAssumptions %>% rename(gtSource = source) %>% group_by(subgroup, gtSource) %>% group_modify(function(d,g,...) {
-      
-      subgroupfilteredTS = filteredTS %>% filter(subgroup==g$subgroup) %>% select(-subgroup) %>% mutate(
-        # this is the num / denominator of the fractions above. 
-        # and is probably an R estimate
-        # keep this as a list column for now
-        bootstrap = map2( Growth, Growth.SE, function(mean,sd) {
-          tibble(
-            id = 1:nrow(d),
-            # alpha = gtAssumptions$alpha,
-            # beta = gtAssumptions$beta,
-            sample_r = rnorm(nrow(d),mean,sd), 
-            R = ( 1 + sample_r/d$beta ) ^ d$alpha,
-            R_disc = discGRToR(sample_r, d)
-          )
-        })
-      # ) %>% mutate(
-      #   R.mean = purrr::map_dbl(bootstrap, function(.x) mean(.x$R)),
-      #   R.sd = purrr::map_dbl(bootstrap, function(.x) sd(.x$R))
+  filteredTS = allEstimates %>% 
+    filter(source %in% sources) %>%
+    filter(dataset %in% datasets) %>%
+    filter(method %in% methods) %>% 
+    filter(name %in% names) %>% 
+    mutate(name = name %>% ordered(names)) %>%
+    filter(!!disadvFilter | !!advFilter) %>%
+    filter(!is.na(Growth) & !is.na(Growth.SE))
+  
+  # filteredTS = filteredTS %>% group_by(source,date,subgroup,dataset,method,name)
+  # browser()
+  precalc = purrr::map2(gtAssumptions$a,gtAssumptions$y,function(a,y) y/(a - lag(a,default=0)))
+  
+  discGRToR = function(r, y = gtAssumptions$y, a = gtAssumptions$a, p=precalc) {
+    R = pmap(list(r,a,y,p), function(r,a,y,p) {
+      # browser(); 
+      # tmp = r/sum(y*(exp(-r*lag(a,default=0))-exp(-r*a))/(a - lag(a,default=0)))
+      tmp = r/sum(p*(exp(-r*lag(a,default=0))-exp(-r*a)))
+      # if(!is.finite(tmp)) browser()
+      return(tmp)
+    })
+    #browser()
+    return(unlist(R))
+  }
+  
+  filteredTS = filteredTS %>% mutate(
+    # this is the num / denominator of the fractions above. 
+    # and is probably an R estimate
+    # keep this as a list column for now
+    bootstrap = map2( Growth, Growth.SE, function(mean,sd) {
+      tibble(
+        id = 1:nrow(gtAssumptions),
+        # alpha = gtAssumptions$alpha,
+        # beta = gtAssumptions$beta,
+        sample_r = rnorm(nrow(gtAssumptions),mean,sd), 
+        R = ( 1 + sample_r/gtAssumptions$beta ) ^ gtAssumptions$alpha,
+        R_disc = discGRToR(sample_r)
       )
-      
-      return(subgroupfilteredTS)
-    })  
-      
-      # browser()
-      
-    disadv = grpComparison %>% filter(subgroup == "negative")
-    adv = grpComparison %>% filter(subgroup == "positive")
-    
-    compare = adv %>% inner_join(disadv, by=c("gtSource","source","date","dataset","method","name"), suffix=c(".adv",".disadv"))
-    
-    # calculate the ratio for each bootstrap.
-    compare2 = compare %>% mutate(bootstrap = purrr::map2(bootstrap.adv, bootstrap.disadv, function(adv,disadv) {
-      adv %>% inner_join(disadv, by="id", suffix=c(".adv",".disadv")) %>% mutate(
-        transadv_cont = R.adv/R.disadv,
-        transadv = R_disc.adv/R_disc.disadv
-        )
-    })) %>% select(-bootstrap.adv, -bootstrap.disadv)
-    
-    return(compare2)
-  })
+    })
+  # ) %>% mutate(
+  #   R.mean = purrr::map_dbl(bootstrap, function(.x) mean(.x$R)),
+  #   R.sd = purrr::map_dbl(bootstrap, function(.x) sd(.x$R))
+  )
+  
+  # browser()
+  
+  disadv = filteredTS %>% filter(!!disadvFilter)
+  adv = filteredTS %>% filter(!!advFilter)
+  
+  compare = adv %>% inner_join(disadv, by=c("source","date","dataset","method","name"), suffix=c(".adv",".disadv"))
+  
+  # calculate the ratio for each bootstrap.
+  compare2 = compare %>% mutate(bootstrap = purrr::map2(bootstrap.adv, bootstrap.disadv, function(adv,disadv) {
+    adv %>% inner_join(disadv, by="id", suffix=c(".adv",".disadv")) %>% mutate(
+      #transadv = R.adv/R.disadv,
+      transadv = R_disc.adv/R_disc.disadv
+      )
+  })) %>% select(-bootstrap.adv, -bootstrap.disadv)
+  
+  return(compare2)
 }
  
-summariseAdvantage = function(compare, combineDays=FALSE,mergeModels = FALSE, combineGt = FALSE, completeDominance=NULL, zeroSpos=NULL) {
+summariseAdvantage = function(compare, combineDays=FALSE,mergeModels = FALSE, completeDominance=NULL, zeroSpos=NULL) {
   # Options are:
   
   if(combineDays) {
@@ -942,7 +789,6 @@ summariseAdvantage = function(compare, combineDays=FALSE,mergeModels = FALSE, co
   # Summarise bootstraps for each day
   compare2 = compare2 %>% group_by(source,dataset,name)
   # merge methods
-  if (!combineGt) compare2 = compare2 %>% group_by(gtSource, .add=TRUE)
   if (!mergeModels) compare2 = compare2 %>% group_by(method, .add=TRUE)
   # Summarise bootstraps for all days
   if (!combineDays) {
@@ -1000,29 +846,9 @@ completeDominanceAll %>% inner_join(zeroSposAll, by="area", suffix=c(".from",".t
 ```
 
 ```{r}
+tmp = allEstimates %>% doAdvantage(gtAssumptions = gtPosterior %>% sample_n(500, replace = TRUE),names = allNational) #,methods = "GP") #Pois (Locfit)")
 
-# allEstimatesOld = readr::read_csv(here::here("output/allEstimates-2021-07-15.csv"))
-# tmp2 = allEstimatesOld %>% doAdvantage(gtAssumptions = gtAssumptions2, gtSource = c("Ganyani (2020) via epinow2","Hart (2021) independent model","Hart (2021) mechanistic model","Challen (2020)"),names = allNational)
-# unsummarised2 = tmp2 %>% summariseAdvantage()
-# summarised2 = tmp2 %>% summariseAdvantage(mergeModels = TRUE,combineDays = TRUE, completeDominance = completeDominanceAll, zeroSpos = zeroSposAll)
-# summarised2 %>% ungroup() %>% mutate(
-#     Level = ifelse(name=="England","Country","NHS region"),
-#     "Date range" = sprintf("%s \u2013 %s",as.character(date.after,"%d %b"),as.character(date.before,"%d %b")),
-#     "Reproduction number ratio" = sprintf("%1.2f (%1.2f\u2013%1.2f)",transadv.Quantile.0.5,transadv.Quantile.0.025,transadv.Quantile.0.975),
-#     "Reproduction number ratio (percentage)" = sprintf("%1.0f%% (%1.0f%%\u2013%1.0f%%)",(transadv.Quantile.0.5-1)*100,(transadv.Quantile.0.025-1)*100,(transadv.Quantile.0.975-1)*100)
-#   ) %>% 
-#   select(Level,`Generation time`=gtSource,Name = name,`Date range`,`Reproduction number ratio`,`Reproduction number ratio (percentage)`) %>% 
-#   arrange(Level,Name) %>%
-#   group_by(Level,Name,`Date range`, `Generation time`)
-
-```
-
-
-```{r}
-# tmp = allEstimates %>% doAdvantage(gtAssumptions = gtAssumptions2, gtSource = c("Hart (2021) mechanistic model","Challen (2020)"),names = allNational) #,methods = "GP") #Pois (Locfit)")
-
-tmp = allEstimates %>% filter(date>"2021-01-01") %>% doAdvantage(gtAssumptions = gtAssumptions2, names = unname(unlist(nationalClusters)))
-# unsummarised = tmp %>% summariseAdvantage()
+unsummarised = tmp %>% summariseAdvantage()
 # tmp2 = allEstimates %>% doAdvantage(gtAssumptions = gtPosterior %>% sample_n(500, replace = TRUE),names = allAreas)
 # ggplot(tmp %>% filter(date>"2021-02-01"), aes(x=date, y=transadv.Quantile.0.5, ymin=transadv.Quantile.0.025,ymax=transadv.Quantile.0.975))+geom_ribbon(fill="grey80",colour=NA)+geom_line()+facet_wrap(vars(name))+coord_cartesian(ylim=c(0,3))
 
@@ -1032,48 +858,32 @@ tmp = allEstimates %>% filter(date>"2021-01-01") %>% doAdvantage(gtAssumptions =
 ```
 
 
-
 ```{r}
-lin = tsp$datasets$getLTLALineages()
-
-
-```
-
-
-```{r}
-summarised = tmp %>% summariseAdvantage(mergeModels = TRUE,combineGt = TRUE,combineDays = TRUE, completeDominance = completeDominanceAll, zeroSpos = zeroSposAll)
+summarised = tmp %>% summariseAdvantage(mergeModels = TRUE,combineDays = TRUE, completeDominance = completeDominanceAll, zeroSpos = zeroSposAll)
 
 summarised %>% ungroup() %>% mutate(
-    Level = ifelse(name=="England","Country","NHS region"),
-    "Date range" = sprintf("%s \u2013 %s",as.character(date.after,"%d %b"),as.character(date.before,"%d %b")),
-    "Reproduction number ratio" = sprintf("%1.2f (%1.2f\u2013%1.2f)",transadv.Quantile.0.5,transadv.Quantile.0.025,transadv.Quantile.0.975),
-    "Reproduction number ratio (percentage)" = sprintf("%1.0f%% (%1.0f%%\u2013%1.0f%%)",(transadv.Quantile.0.5-1)*100,(transadv.Quantile.0.025-1)*100,(transadv.Quantile.0.975-1)*100)
-  ) %>% 
-  select(Level,
-         #`Generation time`=gtSource,
-         Name = name,`Date range`,`Reproduction number ratio`,`Reproduction number ratio (percentage)`) %>% 
-  arrange(Level,Name) %>%
-  group_by(Level) %>% #, `Generation time`) %>%
+  Level = ifelse(name=="England","Country","NHS region"),
+  "Date range" = sprintf("%s \u2013 %s",as.character(date.after,"%d %b"),as.character(date.before,"%d %b")),
+  "Reproduction number ratio" = sprintf("%1.2f (%1.2f\u2013%1.2f)",transadv.Quantile.0.5,transadv.Quantile.0.025,transadv.Quantile.0.975),
+  "Reproduction number ratio (percentage)" = sprintf("%1.0f%% (%1.0f%%\u2013%1.0f%%)",(transadv.Quantile.0.5-1)*100,(transadv.Quantile.0.025-1)*100,(transadv.Quantile.0.975-1)*100)
+) %>% select(Level,Name = name,`Date range`,`Reproduction number ratio (ratio)`,`Reproduction number ratio (percentage)`) %>% group_by(Level) %>%
   standardPrintOutput::saveTable(paste0(here::here("output/transmission-advantage-table-"),Sys.Date()))
 ```
 
 # Transmission advantage over time and region
 
 ```{r}
-unsummarised = tmp %>% summariseAdvantage(mergeModels = TRUE,combineGt = TRUE,combineDays = FALSE)
-summarised = tmp %>% summariseAdvantage(mergeModels = TRUE,combineGt = TRUE,combineDays = TRUE, completeDominance = completeDominanceAll, zeroSpos = zeroSposAll)
-
 doTransAdvPlot = function(names,unsummarised,summarised, minDate="2021-01-21", maxDate=max(unsummarised$date,na.rm=TRUE)) {
   tmp2 = unsummarised %>% filter(name %in% names)
   tmp3 = summarised %>% filter(name %in% names)
 
   p= ggplot(tmp2 %>% filter(date>minDate), aes(x=date, y=transadv.mean, ymin=transadv.Quantile.0.025,ymax=transadv.Quantile.0.975))+
-    geom_ribbon(fill="grey70",colour=NA,alpha=0.4)+
-    geom_line(colour="black",size=0.25)+
+    geom_ribbon(aes(group=method),fill="grey70",colour=NA,alpha=0.4)+
+    geom_line(aes(colour=method))+
     facet_wrap(vars(name))+coord_cartesian(ylim=c(0,2.5))+
     geom_hline(yintercept=1,colour="black")+
-    geom_rect(data=tmp3, inherit.aes=FALSE, mapping=aes(ymin=transadv.Quantile.0.025,ymax=transadv.Quantile.0.975,xmin=date.after,xmax=date.before),colour=NA,fill="#8080FF",alpha=0.35)+
-    geom_segment(data=tmp3, inherit.aes=FALSE,  mapping=aes(y=transadv.Quantile.0.5,yend=transadv.Quantile.0.5,x=date.after,xend=date.before),colour="blue",size=0.25)+
+    geom_rect(data=tmp3, inherit.aes=FALSE, mapping=aes(ymin=transadv.Quantile.0.025,ymax=transadv.Quantile.0.975,xmin=date.after,xmax=date.before),colour=NA,fill="grey20",alpha=0.35)+
+    geom_segment(data=tmp3, inherit.aes=FALSE,  mapping=aes(y=transadv.Quantile.0.5,yend=transadv.Quantile.0.5,x=date.after,xend=date.before),colour="black")+
     scale_x_date(breaks=seq(as.Date(minDate),Sys.Date(),by = 14),date_labels="%d-%m")+xlab(NULL)+
     ylab(latex2exp::TeX("\\frac{R_t(S_{pos})}{R_t(S_{neg})}"))+
     standardPrintOutput::smallLegend()+
@@ -1081,7 +891,6 @@ doTransAdvPlot = function(names,unsummarised,summarised, minDate="2021-01-21", m
     theme(axis.text.x.bottom = element_text(angle=60), text=element_text(size=6))
   return(p)
 }
-doTransAdvPlot(names = "England",unsummarised,summarised)
 
 p1 = doTransAdvPlot(names = "England",unsummarised,summarised)
 p2 = doTransAdvPlot(names = nationalClusters$`NHS Regions (N)`,unsummarised,summarised)+facet_wrap(vars(name),nrow=1)+standardPrintOutput::hideX()
@@ -1095,98 +904,5 @@ standardPrintOutput::saveHalfPageFigure(p10, paste0(here::here("output/Fig4-Grow
 
 ```
 
-```{r}
-summarised2 = tmp %>% summariseAdvantage(mergeModels = TRUE,combineGt = FALSE,combineDays = TRUE, completeDominance = completeDominanceAll, zeroSpos = zeroSposAll)
-
-summarised2 %>% ungroup() %>% mutate(
-    Level = ifelse(name=="England","Country","NHS region"),
-    "Date range" = sprintf("%s \u2013 %s",as.character(date.after,"%d %b"),as.character(date.before,"%d %b")),
-    `R number ratio` = sprintf("%1.2f (%1.2f\u2013%1.2f)",transadv.Quantile.0.5,transadv.Quantile.0.025,transadv.Quantile.0.975),
-    `R number ratio (%age)` = sprintf("%1.0f%% (%1.0f%%\u2013%1.0f%%)",(transadv.Quantile.0.5-1)*100,(transadv.Quantile.0.025-1)*100,(transadv.Quantile.0.975-1)*100)
-  ) %>% 
-  select(Level,
-         `Generation time`=gtSource,
-         Name = name,`Date range`,`R number ratio`,`R number ratio (%age)`) %>% 
-  arrange(Level,Name,`Generation time`) %>%
-  group_by(Level,Name,`Date range`) %>% #, `Generation time`) %>%
-  standardPrintOutput::saveTable(paste0(here::here("output/transmission-advantage-by-gt-table-"),Sys.Date()),defaultFontSize = 8)
-```
-
-```{r}
-summarised3 = tmp %>% summariseAdvantage(mergeModels = FALSE,combineGt = TRUE,combineDays = TRUE, completeDominance = completeDominanceAll, zeroSpos = zeroSposAll)
-
-summarised3 %>% ungroup() %>% mutate(
-    Level = ifelse(name=="England","Country","NHS region"),
-    "Date range" = sprintf("%s \u2013 %s",as.character(date.after,"%d %b"),as.character(date.before,"%d %b")),
-    `R number ratio` = sprintf("%1.2f (%1.2f\u2013%1.2f)",transadv.Quantile.0.5,transadv.Quantile.0.025,transadv.Quantile.0.975),
-    `R number ratio (%age)` = sprintf("%1.0f%% (%1.0f%%\u2013%1.0f%%)",(transadv.Quantile.0.5-1)*100,(transadv.Quantile.0.025-1)*100,(transadv.Quantile.0.975-1)*100)
-  ) %>% 
-  select(Level,
-         `Model`=method,
-         Name = name,
-         `Date range`,
-         `R number ratio`,
-         `R number ratio (%age)`) %>% 
-  arrange(Level,Name,`Model`) %>%
-  group_by(Level,Name,`Date range`) %>% #, `Generation time`) %>%
-  standardPrintOutput::saveTable(paste0(here::here("output/transmission-advantage-by-method-table-"),Sys.Date()),defaultFontSize = 6)
-```
 
 
-```{r}
-tmpAdvantages = tmp %>% mutate(name = as.character(name)) %>% 
-    inner_join(completeDominanceAll %>% select(name=area,date) %>% mutate(name = as.character(name)), by="name",suffix=c("",".after")) %>% 
-    inner_join(zeroSposAll %>% select(name=area,date) %>% mutate(name = as.character(name)), by="name",suffix=c("",".before")) %>% 
-    filter(date > date.after & date < date.before) %>% 
-    filter(name=="England") %>% 
-    unnest(bootstrap)
-
-p = ggplot(tmpAdvantages, aes(x=gtSource, fill=method, colour=method, y=transadv))+
-  geom_violin(width=0.9)+
-  stat_summary(geom="point",fun=mean, colour="black", position=position_dodge(width=0.9))+
-  standardPrintOutput::narrower()+
-  xlab("Generation time source")+
-  ylab(latex2exp::TeX("\\frac{R_t(S_{pos})}{R_t(S_{neg})}"))+
-  facet_wrap(vars(name))+
-  theme(axis.text.x.bottom = element_text(angle = 15))+
-  coord_cartesian(ylim=c(1,NA))
-
-standardPrintOutput::saveHalfPageFigure(p, paste0(here::here("output/SuppFig-TransAdvantageByModelAndGt-"),Sys.Date()))
-
-sqrt(mean((tmpAdvantages$transadv - tmpAdvantages$transadv_cont)^2, na.rm = TRUE))
-
-```
-```{r}
-
-gtCrossComp = bind_rows(
-  gtIntrinsicVariant %>% mutate(source = "Alpha vs Delta"),
-  gtIntrinsicVariant %>% mutate(source = "Combined"),
-  gtIntrinsicVariant %>% mutate(source = "Combined", subgroup=ifelse(subgroup=="negative","positive","negative")),
-  gtIntrinsicVariant %>% mutate(source = paste0(variant," only")),
-  gtIntrinsicVariant %>% mutate(source = paste0(variant," only"), subgroup=ifelse(subgroup=="negative","positive","negative"))
-)
-
-gtCrossComp = gtCrossComp %>% mutate(
-    a = list(c(seq(0.5,19.5),25)),
-    y = purrr::pmap(list(alpha,beta,a), function(.shape,.rate,.p) { 
-      tmp = pgamma(.p,.shape,.rate)-lag(pgamma(.p,.shape,.rate),default=0) 
-      tmp = tmp/sum(tmp)
-    }),
-  )
-
-tmp2 = allEstimates %>% filter(date>"2021-01-01") %>% doAdvantage(gtAssumptions = gtCrossComp, names = "England") #unname(unlist(nationalClusters)))
-
-summarised3 = tmp2 %>% summariseAdvantage(mergeModels = TRUE,combineGt = FALSE,combineDays = TRUE, completeDominance = completeDominanceAll, zeroSpos = zeroSposAll)
-
-summarised3 %>% ungroup() %>% mutate(
-    Level = ifelse(name=="England","Country","NHS region"),
-    "Date range" = sprintf("%s \u2013 %s",as.character(date.after,"%d %b"),as.character(date.before,"%d %b")),
-    `R number ratio` = sprintf("%1.2f (%1.2f\u2013%1.2f)",transadv.Quantile.0.5,transadv.Quantile.0.025,transadv.Quantile.0.975),
-    `R number ratio (%age)` = sprintf("%1.0f%% (%1.0f%%\u2013%1.0f%%)",(transadv.Quantile.0.5-1)*100,(transadv.Quantile.0.025-1)*100,(transadv.Quantile.0.975-1)*100)
-  ) %>% 
-  select(
-         `Generation time`=gtSource,
-         `R number ratio`,`R number ratio (%age)`) %>% 
-  arrange(`Generation time`) %>%
-  standardPrintOutput::saveTable(paste0(here::here("output/transmission-advantage-by-intrinsic-gt-table-"),Sys.Date()))
-```

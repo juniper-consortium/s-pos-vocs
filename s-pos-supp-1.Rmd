@@ -531,6 +531,8 @@ tmp3 = rawDemographics %>%
     )) %>%
     filter(!is.na(dateWindow)) %>%
     group_by(dateWindow,area,sGene,ageCat) %>% summarise(count=n()) %>%
+    ungroup() %>%
+    tidyr::complete(dateWindow,area,sGene,ageCat, fill=list(count=0)) %>%
     group_by(dateWindow,area,sGene) %>% mutate(binom::binom.confint(count,sum(count),methods = "wilson"))
 
 tmp3 %>% readr::write_csv(paste0(here::here("output/demographics-histogram-by-area-of-concern-"),Sys.Date(),".csv"))

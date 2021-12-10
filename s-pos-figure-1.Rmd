@@ -104,7 +104,7 @@ ltlaCounts = bind_rows(
   tmp %>% filter(type == "B.1.617.2") %>% group_by(code = LTLA_code, name=LTLA_name) %>% summarise(count=n()) %>% mutate(category="B.1.617.2"), 
   tmp %>% filter(sGene == "positive") %>% group_by(code = LTLA_code, name=LTLA_name) %>% summarise(count=n()) %>% mutate(category="S-gene positive"),
   tmp %>% filter(sGene == "positive" & type %in% c("other VOC/VUI","P.1 & P.2","B.1.351","B.1.617.1")) %>% group_by(code = LTLA_code, name=LTLA_name) %>% summarise(count=n()) %>% mutate(category="non B.1.617.2 VOC"),
-)
+) %>% mutate(category = category %>% ordered(c("B.1.617.2","S-gene positive","non B.1.617.2 VOC")))
 
 categories = ltlaCounts %>% ungroup() %>% select(category) %>% distinct()
 tmp = ladMap %>% as_tibble() %>% select(code,name) %>% distinct() %>% inner_join(categories, by=character())
@@ -115,13 +115,19 @@ mapVoc = ltlaCounts2 %>% left_join(ladMap, by=c("code"), suffix=c("",".map")) %>
 ```
 
 ```{r}
-mapP1 = lapply(categories$category, function(cat) {
+
   
-    breaks = mapVoc %>% filter(category==cat & count>0) %>% pull(count) %>% quantile(c(0.5,0.75,0.9,0.95,0.975))
+    breaks = mapVoc %>% 
+      #filter(category==cat & count>0) %>% 
+      filter(count>0) %>% 
+      pull(count) %>% quantile(c(0.5,0.75,0.9,0.95,0.975))
     breaks = sort(unique(round(c(5,unname(breaks[breaks>5])))))
     plotlabels = c("0",ifelse(c(0,breaks)+1 == c(breaks,Inf), as.character(breaks) , paste0( as.character(c(0,breaks)+1),c(rep("-",length(breaks)),"+"),c(as.character(breaks),""))))
-    
-    tmp = mapVoc %>% filter(category==cat) %>% mutate(count2=cut(count,breaks = c(-Inf,0,breaks,Inf),labels = plotlabels,include.lowest = FALSE))
+
+mapP1 = lapply(categories$category, function(cat) {    
+    tmp = mapVoc %>% 
+      filter(category==cat) %>% 
+      mutate(count2=cut(count,breaks = c(-Inf,0,breaks,Inf),labels = plotlabels,include.lowest = FALSE))
 
     p = ggplot()+
       geom_sf(data=tmp,mapping=aes(fill=count2),size=0.05,colour="white")+
@@ -139,20 +145,23 @@ mapP1 = lapply(categories$category, function(cat) {
     if(cat == "S-gene positive") {
       p = p +
         ggrepel::geom_label_repel(
-          data = bufferedAocLabels,# %>% filter(pos=="left"), 
+          data = bufferedAocLabels,# %>% mutate(category="S-gene positive" %>% ordered(c("B.1.617.2","S-gene positive","non B.1.617.2 VOC"))),# %>% filter(pos=="left"), 
           aes(x=x,y=y,label=areaName),
           min.segment.length = 0, segment.colour = "cyan", fill="#20202080",colour="cyan",size=1.2,segment.size=0.25,nudge_x = -3,direction="y")#+
         # ggrepel::geom_label_repel(
         #   data = bufferedAocLabels %>% filter(pos=="right"), 
         #   aes(x=x,y=y,label=areaName),
         #   min.segment.length = 0, segment.colour = "cyan", fill="#80808080",colour="cyan",size=1.2,nudge_x = 2,direction="y")
+    } else {
+      p = p + guides(fill=guide_none())
     }
     
     return(p)
 
 })
 
-# mapP1
+# mapP1 = p
+mapP1
 #standardPrintOutput::saveHalfPageFigure(patchwork::wrap_plots(mapP1),here::here("output/LTLA-cases"))
 ```
 
