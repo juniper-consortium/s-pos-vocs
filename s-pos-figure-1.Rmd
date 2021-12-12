@@ -2,7 +2,7 @@
 title: "S-gene positive variants of concern in pillar 2 cases"
 author: "Rob Challen"
 date: '`r format(Sys.Date(), "%d-%m-%Y")`'
-output: 
+output:
   pdf_document :
     fig_caption: yes
 header-includes:
@@ -36,9 +36,9 @@ source(here::here("s-pos-data.R"))
 
 
 
-# Descriptive stats 
+# Descriptive stats
 
-* TODO: some of these are used in the text of paper but need to figure out which exactly and label appropriately.
+* TODO: Some of these are used in the text of paper but need to figure out which exactly and label appropriately.
 
 ```{r}
 # quick count summary ----
@@ -49,14 +49,14 @@ with(mayCases, table(sGene,type,useNA = "ifany"))
 combinedSpositives  %>% filter(earliest_specimen_date > "2021-05-01" & !is.na(type)) %>% group_by(type) %>% count() %>%
   ungroup() %>% mutate(p=  n/sum(n))
 
-genomics %>% 
-  group_by(variant) %>% 
+genomics %>%
+  group_by(variant) %>%
   summarise(
-    count = n(), 
-    earliest = min(specimen_date,na.rm = TRUE), 
+    count = n(),
+    earliest = min(specimen_date,na.rm = TRUE),
     latest = max(specimen_date,na.rm = TRUE)
   ) %>%
-  mapVOCtoLineage(vocVar = variant) %>% 
+  mapVOCtoLineage(vocVar = variant) %>%
   readr::write_csv(paste0(here::here("output/CTAS-genomics-summary-"),Sys.Date(),".csv"))
 
 
@@ -65,7 +65,7 @@ genomics %>%
   return((tmp %>% filter(is.na(type)) %>% nrow())/(tmp %>% nrow()))
 })
 
-unsequenced = 
+unsequenced =
 (combinedSpositives %>% filter(earliest_specimen_date > "2021-01-21") %>% filter(is.na(type)) %>% nrow())/
   (combinedSpositives %>% filter(earliest_specimen_date > "2021-01-21") %>% nrow())
 "2021-02-01"
@@ -90,7 +90,7 @@ names(aocColours)=aocNames
 
 bufferedAocMap = aocMap %>% filter(areaName %in% as.vector(unlist(localClusters)))# %>% sf::st_buffer(-0.02)
 bufferedAocLabels = aocMap %>% sf::st_centroid() %>%
-    mutate(x=sf::st_coordinates(.)[,"X"], y=sf::st_coordinates(.)[,"Y"]) %>% 
+    mutate(x=sf::st_coordinates(.)[,"X"], y=sf::st_coordinates(.)[,"Y"]) %>%
     as_tibble() %>%
     filter(areaName %in% as.vector(unlist(localClusters))) %>%
     mutate(pos = ifelse(x<mean(x),"left","right"))
@@ -101,33 +101,27 @@ ladMap = dpc$geog$getMap("LAD19") %>% filter(code %>% stringr::str_starts("E"))
 
 tmp = combinedCases %>% filter(earliest_specimen_date >= "2021-03-01" & earliest_specimen_date < "2021-05-01")
 ltlaCounts = bind_rows(
-  tmp %>% filter(type == "B.1.617.2") %>% group_by(code = LTLA_code, name=LTLA_name) %>% summarise(count=n()) %>% mutate(category="B.1.617.2"), 
+  tmp %>% filter(type == "B.1.617.2") %>% group_by(code = LTLA_code, name=LTLA_name) %>% summarise(count=n()) %>% mutate(category="B.1.617.2"),
   tmp %>% filter(sGene == "positive") %>% group_by(code = LTLA_code, name=LTLA_name) %>% summarise(count=n()) %>% mutate(category="S-gene positive"),
   tmp %>% filter(sGene == "positive" & type %in% c("other VOC/VUI","P.1 & P.2","B.1.351","B.1.617.1")) %>% group_by(code = LTLA_code, name=LTLA_name) %>% summarise(count=n()) %>% mutate(category="non B.1.617.2 VOC"),
 ) %>% mutate(category = category %>% ordered(c("B.1.617.2","S-gene positive","non B.1.617.2 VOC")))
 
 categories = ltlaCounts %>% ungroup() %>% select(category) %>% distinct()
 tmp = ladMap %>% as_tibble() %>% select(code,name) %>% distinct() %>% inner_join(categories, by=character())
-ltlaCounts2 = tmp %>% left_join(ltlaCounts, by=c("code","name","category")) %>% 
+ltlaCounts2 = tmp %>% left_join(ltlaCounts, by=c("code","name","category")) %>%
     mutate(count = ifelse(is.na(count),0,count))
-  
+
 mapVoc = ltlaCounts2 %>% left_join(ladMap, by=c("code"), suffix=c("",".map")) %>% sf::st_as_sf()
 ```
 
 ```{r}
+mapP1 = lapply(categories$category, function(cat) {
 
-  
-    breaks = mapVoc %>% 
-      #filter(category==cat & count>0) %>% 
-      filter(count>0) %>% 
-      pull(count) %>% quantile(c(0.5,0.75,0.9,0.95,0.975))
+    breaks = mapVoc %>% filter(category==cat & count>0) %>% pull(count) %>% quantile(c(0.5,0.75,0.9,0.95,0.975))
     breaks = sort(unique(round(c(5,unname(breaks[breaks>5])))))
     plotlabels = c("0",ifelse(c(0,breaks)+1 == c(breaks,Inf), as.character(breaks) , paste0( as.character(c(0,breaks)+1),c(rep("-",length(breaks)),"+"),c(as.character(breaks),""))))
 
-mapP1 = lapply(categories$category, function(cat) {    
-    tmp = mapVoc %>% 
-      filter(category==cat) %>% 
-      mutate(count2=cut(count,breaks = c(-Inf,0,breaks,Inf),labels = plotlabels,include.lowest = FALSE))
+    tmp = mapVoc %>% filter(category==cat) %>% mutate(count2=cut(count,breaks = c(-Inf,0,breaks,Inf),labels = plotlabels,include.lowest = FALSE))
 
     p = ggplot()+
       geom_sf(data=tmp,mapping=aes(fill=count2),size=0.05,colour="white")+
@@ -139,23 +133,23 @@ mapP1 = lapply(categories$category, function(cat) {
       standardPrintOutput::narrower()+
       standardPrintOutput::smallLegend(textSize = 6)+ #spaceLegend = 0.8)+
       facet_wrap(vars(category))
-      
-      
-    
+
+
+
     if(cat == "S-gene positive") {
       p = p +
         ggrepel::geom_label_repel(
-          data = bufferedAocLabels,# %>% mutate(category="S-gene positive" %>% ordered(c("B.1.617.2","S-gene positive","non B.1.617.2 VOC"))),# %>% filter(pos=="left"), 
+          data = bufferedAocLabels,# %>% filter(pos=="left"),
           aes(x=x,y=y,label=areaName),
           min.segment.length = 0, segment.colour = "cyan", fill="#20202080",colour="cyan",size=1.2,segment.size=0.25,nudge_x = -3,direction="y")#+
         # ggrepel::geom_label_repel(
-        #   data = bufferedAocLabels %>% filter(pos=="right"), 
+        #   data = bufferedAocLabels %>% filter(pos=="right"),
         #   aes(x=x,y=y,label=areaName),
         #   min.segment.length = 0, segment.colour = "cyan", fill="#80808080",colour="cyan",size=1.2,nudge_x = 2,direction="y")
     } else {
       p = p + guides(fill=guide_none())
     }
-    
+
     return(p)
 
 })
@@ -180,15 +174,15 @@ pSposIsVariant = allVoc %>%
   #   detected = ifelse(asymptomatic_indicator == "Y","screening & LFT","symptoms")
   # ) %>%
   group_by(type, date) %>%
-  summarise(count= n()) %>% 
+  summarise(count= n()) %>%
   ungroup() %>%
   tidyr::complete(type,date,fill=list(count=0)) %>%
-  group_by(type) %>% 
+  group_by(type) %>%
   arrange(date) %>%
   mutate(Roll.count = stats::filter(count,filter=rep(1/21,21))) %>%
-  filter(!is.na(Roll.count)) %>% 
-  group_by(date) %>% 
-  mutate(binom::binom.confint(Roll.count, sum(Roll.count), conf.level = 0.95, methods = "wilson")) %>% 
+  filter(!is.na(Roll.count)) %>%
+  group_by(date) %>%
+  mutate(binom::binom.confint(Roll.count, sum(Roll.count), conf.level = 0.95, methods = "wilson")) %>%
   ungroup() %>%
   mutate(type = type %>% ordered(vocLevels2))
 
@@ -222,12 +216,12 @@ countSposSeqByType = ggplot(pSposIsVariant %>% filter(date > "2021-01-21" & date
 
 
 # pSposPlot %>% standardPrintOutput::saveSixthPageFigure(filename=here::here("output/propSPosIsVOC"))
-# 
+#
 # rightPanel = ((countSposSeqByType+guides(colour=guide_none(),fill=guide_none())+standardPrintOutput::narrower()+standardPrintOutput::hideX())+
 #     (pSposPlot+standardPrintOutput::narrower()+theme(legend.justification='left'))+
 #     patchwork::guide_area()+
 #     patchwork::plot_annotation(tag_levels = "A")+
-#     patchwork::plot_layout(ncol=1,guides = "collect",heights = c(3,3,1))) 
+#     patchwork::plot_layout(ncol=1,guides = "collect",heights = c(3,3,1)))
 # %>% standardPrintOutput::saveFigure(maxWidth=3,maxHeight = 6, filename=here::here("output/Fig2ProportionsSequences"))
 
 seqBySgeneCounts = allVoc %>%
@@ -249,14 +243,14 @@ sgeneCounts = allEpisodes %>%
   filter(!is.na(Roll.count)) %>%
   group_by(date) %>%
   mutate(binom::binom.confint(Roll.count, sum(Roll.count), conf.level = 0.95, methods = "wilson")) %>%
-  ungroup() 
+  ungroup()
 
 # Code to include modelled predictions of B.1.617.2 alongside S-pos and B.1.1.7 alongside S-neg
 # lsoaCentroid = dpc$geog$getMap("LSOA11")
 # lsoaCentroid = lsoaCentroid %>% sf::st_centroid()
 # mapping = dpc$geog$getContainedIn(inputSf = lsoaCentroid,outputShape = aocMap,outputIdVar = areaName)
 # modelled = readr::read_csv(here::here("input/ByLSOAVariantRateswDGP.csv/ByLSOAVariantRateswDGP.csv"))
-# 
+#
 # modelledEng = modelled %>%
 #   filter(LSOA_code %>% stringr::str_starts("E")) %>%
 #   group_by(week, type) %>%
@@ -264,7 +258,7 @@ sgeneCounts = allEpisodes %>%
 #   mutate(area="England", variantDaily = variantGR/7, date = week+3.5) %>%
 #   mutate(type = type %>% ordered(vocLevels))
 #
-# countsBySgene2 = 
+# countsBySgene2 =
 #   ggplot(
 #     bind_rows(
 #       sgeneCounts %>% mutate(source = "Pillar 2 positives"),
@@ -284,16 +278,16 @@ sgeneCounts = allEpisodes %>%
 #   standardPrintOutput::smallLegend(textSize = 8,spaceLegend = 1)+
 #   ylab("Number of cases")+
 #   scale_x_date(limits = c(as.Date("2021-01-21"),NA), date_breaks = "2 weeks", date_labels = "%d-%m")
-# 
-# 
+#
+#
 #   combinedPlot2 = (
 #     (countsBySgene2+theme(legend.justification='left',axis.text.x = element_text(angle=60))+standardPrintOutput::smallLegend(spaceLegend = 1)) |
 #     ( (countSposSeqByType+guides(colour=guide_none(),fill=guide_none())+standardPrintOutput::narrower()+standardPrintOutput::hideX()) /
 #     (pSposPlot+guides(colour=guide_none(),fill=guide_none())+standardPrintOutput::narrower()+theme(axis.text.x = element_text(angle=60)))))+
 #     patchwork::plot_annotation(tag_levels = "A")+patchwork::plot_layout(guides="collect")
-  
-  
-  countsBySgene = 
+
+
+  countsBySgene =
     ggplot(
       bind_rows(
         sgeneCounts %>% mutate(source = "Pillar 2 positives"),
@@ -315,22 +309,22 @@ sgeneCounts = allEpisodes %>%
 
 
   combinedPlot = (
-      
+
       (
         (
           countsBySgene+theme(legend.justification='left',legend.spacing = unit(0,"mm"),text = element_text(size=6),axis.text.x = element_text(angle=60))+standardPrintOutput::narrower()+standardPrintOutput::smallLegend(textSize=6,spaceLegend = 1)
-        ) | ( 
+        ) | (
           (
             countSposSeqByType+guides(colour=guide_none(),fill=guide_none())+theme(text = element_text(size=6))+standardPrintOutput::narrower()+standardPrintOutput::hideX()
           ) / (
             pSposPlot+standardPrintOutput::narrower()+theme(axis.text.x = element_text(angle=60), text = element_text(size=6))+standardPrintOutput::smallLegend(textSize=6)
           )
         )
-      ) / 
+      ) /
       patchwork::wrap_plots(mapP1)
     )+
     patchwork::plot_annotation(tag_levels = "A")
-  
+
   combinedPlot %>% standardPrintOutput::saveTwoThirdPageFigure(filename=paste0(here::here("output/Figure1-"),Sys.Date()))
 ```
 
@@ -340,31 +334,31 @@ sgeneCounts = allEpisodes %>%
 ```{r}
 # TODO: NHSER breakdown of panel C
 # Same plots as above stratified by screening
-# 
-# pSposIsVariant = allVoc %>% 
+#
+# pSposIsVariant = allVoc %>%
 #   inner_join(sgll %>% select(FINALID, sgtf_under30CT), by=c("finalid"="FINALID")) %>%
 #   filter(sgtf_under30CT == 0) %>%
 #   mutate(
 #     detected = ifelse(asymptomatic_indicator == "Y","screening","symptoms")
 #   ) %>%
 #   group_by(detected, type, date=specimen_date) %>%
-#   summarise(count= n()) %>% 
+#   summarise(count= n()) %>%
 #   ungroup() %>%
 #   tidyr::complete(detected, type,date,fill=list(count=0)) %>%
-#   group_by(detected, type) %>% 
+#   group_by(detected, type) %>%
 #   arrange(date) %>%
 #   mutate(Roll.count = stats::filter(count,filter=rep(1,14),sides=1)) %>%
-#   filter(!is.na(Roll.count)) %>% 
-#   group_by(detected, date) %>% 
-#   mutate(binom::binom.confint(Roll.count, sum(Roll.count), conf.level = 0.95, methods = "wilson")) %>% 
+#   filter(!is.na(Roll.count)) %>%
+#   group_by(detected, date) %>%
+#   mutate(binom::binom.confint(Roll.count, sum(Roll.count), conf.level = 0.95, methods = "wilson")) %>%
 #   ungroup()
-# 
-# 
-# 
+#
+#
+#
 # pSpos351Plot = ggplot(pSposIsVariant %>% filter(date > "2021-01-21" & type %in% c("unclassified","B.1.351","B.1.617.1","B.1.617.2")), aes(x=date, y=mean, ymin = lower,ymax=upper,colour=type, fill=type))+geom_ribbon(alpha=0.2,colour=NA)+geom_line()+standardPrintOutput::smallLegend()+ylab("est proportion of sequenced S+")+coord_cartesian(ylim=c(0,1))+facet_wrap(vars(detected),ncol=1)+standardPrintOutput::narrower()+theme(legend.title = element_blank())
-# 
+#
 # seqCounts = sgll %>%
-#   inner_join(ll2 %>% select(FINALID,asymptomatic_indicator),by="FINALID") %>% 
+#   inner_join(ll2 %>% select(FINALID,asymptomatic_indicator),by="FINALID") %>%
 #   #filter(sgtf_under30ct == 0) %>%
 #   group_by(sgtf_under30CT,asymptomatic_indicator,date=specimen_date) %>%
 #   summarise(count= n()) %>% arrange(date) %>%
@@ -377,12 +371,10 @@ sgeneCounts = allEpisodes %>%
 #       sgtf_under30CT == 0 ~ "positive"
 #     )
 #   )
-# 
+#
 # countsBySgeneAndDetection = ggplot(seqCounts %>% filter(date > "2020-11-01" & sGene != "equivocal"),aes(x=date,y=count, colour=context, linetype = sGene))+
 #   geom_line(aes(y=Roll.count))+scale_y_continuous(trans="log1p",breaks = c(1,2,5,10,20,50,100,200,500,1000,2000,5000),limits=c(0,NA))+standardPrintOutput::narrower()+standardPrintOutput::smallLegend(spaceLegend = 0.6)
-# 
+#
 # (countsBySgeneAndDetection+pSpos351Plot+patchwork::plot_layout(ncol=3)) %>% standardPrintOutput::saveHalfPageFigure(filename=here::here("output/countsBySgeneAndPVariantVsDetection"))
 
 ```
-
-
